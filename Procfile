@@ -1,1 +1,1 @@
-web: gunicorn Agency.wsgi
+web: gunicorn main.wsgi

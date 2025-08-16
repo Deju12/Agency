@@ -24,7 +24,92 @@ def check_db_connection(request):
         return response("success", 200, "Connected to PostgreSQL database")
     except OperationalError as e:
         return response("error", 500, "Connection failed", {"error": str(e)})
+#GET user
+def get_all_users(request):
+    if request.method != "GET":
+        return JsonResponse({"status": "fail", "code": 405, "message": "Method not allowed"})
+    try:
+        users = User.objects.all()
+        data = []
+        role = request.GET.get('role')
+        if role:
+            users = users.filter(role=role)
+        for u in users:
+            data.append({
+                "id": u.id,
+                "username": u.username,
+                "role": u.role,
+                "forgot_key": u.forgot_key,
+            })
 
+        return JsonResponse({
+            "status": "success",
+            "code": 200,
+            "message": "Users fetched",
+            "data": data
+        })
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "code": 400,
+            "message": "Bad request",
+            "data": {"error": str(e)}
+        })
+        
+#CREATE user
+@csrf_exempt
+def create_user(request):
+    if request.method != "POST":
+        return JsonResponse({"status": "fail", "code": 405, "message": "Method not allowed"})
+    try:
+        body = json.loads(request.body)
+        username = body.get("username")
+        password = body.get("password")
+        role = body.get("role")
+
+        if not all([username, password, role]):
+            return JsonResponse({"status": "fail", "code": 400, "message": "Missing required fields"})
+
+        user = User.objects.create(username=username, password=password, role=role)
+        return JsonResponse({"status": "success", "code": 201, "message": "User created", "data": {"id": user.id}})
+    except Exception as e:
+        return JsonResponse({"status": "error", "code": 400, "message": "Bad request", "data": {"error": str(e)}})
+
+# UPDATE user
+@csrf_exempt
+def update_user(request, user_id):
+    if request.method != "PUT":
+        return JsonResponse({"status": "fail", "code": 405, "message": "Method not allowed"})
+    try:
+        user = User.objects.filter(username=user_id).first()
+        if not user:
+            return JsonResponse({"status": "fail", "code": 404, "message": "User not found"})
+
+        body = json.loads(request.body)
+        user.username = body.get("username", user.username)
+        user.password = body.get("password", user.password)
+        user.role = body.get("role", user.role)
+        user.save()
+
+        return JsonResponse({"status": "success", "code": 200, "message": "User updated"})
+    except Exception as e:
+        return JsonResponse({"status": "error", "code": 400, "message": "Bad request", "data": {"error": str(e)}})
+
+# DELETE user
+@csrf_exempt
+def delete_user(request, user_id):
+    if request.method != "DELETE":
+        return JsonResponse({"status": "fail", "code": 405, "message": "Method not allowed"})
+    try:
+        user = User.objects.filter(username=user_id).first()
+        if not user:
+            return JsonResponse({"status": "fail", "code": 404, "message": "User not found"})
+        user.delete()
+        return JsonResponse({"status": "success", "code": 200, "message": "User deleted"})
+    except Exception as e:
+        return JsonResponse({"status": "error", "code": 400, "message": "Bad request", "data": {"error": str(e)}})
+    
+    
 @csrf_exempt
 def login_view(request):
     if request.method != "POST":
@@ -119,7 +204,7 @@ def update_applicant(request, applicant_id):
     if request.method != "PUT":
         return response("error", 405, "Only PUT allowed")
     try:
-        applicant = Applicant.objects.filter(id=applicant_id).first()
+        applicant = Applicant.objects.filter(application_no=applicant_id).first()
         if not applicant:
             return response("fail", 404, "Applicant not found")
         data = json.loads(request.body)
@@ -136,7 +221,7 @@ def delete_applicant(request, applicant_id):
     if request.method != "DELETE":
         return response("error", 405, "Only DELETE allowed")
     try:
-        applicant = Applicant.objects.filter(id=applicant_id).first()
+        applicant = Applicant.objects.filter(application_no=applicant_id).first()
         if not applicant:
             return response("fail", 404, "Applicant not found")
         applicant.delete()

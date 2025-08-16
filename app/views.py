@@ -149,13 +149,34 @@ def list_applicants(request):
     except Exception as e:
         return response("error", 400, "Bad request", {"error": str(e)})
 
-# Read One
-def get_applicant(request, applicant_id):
+def get_applicant(request):
     try:
-        applicant = Applicant.objects.filter(id=applicant_id).first()
+        # Allowed fields for filtering
+        allowed_filters = ["application_no", "passport_no", "religion", "gender", "visa_no"]
+
+        filters = {}
+        for field in allowed_filters:
+            value = request.GET.get(field)
+            if value:
+                filters[field] = value
+
+        if not filters:
+            return response("fail", 400, "No filter parameter provided")
+         
+        # Get only the first matching applicant
+        applicant = Applicant.objects.filter(**filters).first()
+
         if not applicant:
             return response("fail", 404, "Applicant not found")
-        return response("success", 200, "Applicant fetched", applicant.__dict__)
+
+        # Serialize applicant fields
+        applicant_data = {
+            field.name: getattr(applicant, field.name)
+            for field in applicant._meta.fields
+        }
+
+        return response("success", 200, "Applicant fetched", applicant_data)
+
     except Exception as e:
         return response("error", 400, "Bad request", {"error": str(e)})
 

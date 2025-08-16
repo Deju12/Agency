@@ -38,6 +38,7 @@ def get_all_users(request):
             data.append({
                 "id": u.id,
                 "username": u.username,
+                "password":u.password,
                 "role": u.role,
                 "forgot_key": u.forgot_key,
             })

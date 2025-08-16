@@ -113,73 +113,6 @@ def create_applicant(request):
     except Exception as e:
         return response("error", 400, "Bad request", {"error": str(e)})
 
-# Read All with Filters/Search
-def list_applicants(request):
-    try:
-        qs = Applicant.objects.all()
-
-        # Filtering
-        religion = request.GET.get("religion")
-        min_exp = request.GET.get("min_experience")
-        max_exp = request.GET.get("max_experience")
-        min_age = request.GET.get("min_age")
-        max_age = request.GET.get("max_age")
-
-        if religion:
-            qs = qs.filter(religion__iexact=religion)
-        if min_exp:
-            qs = qs.filter(experience__gte=min_exp)
-        if max_exp:
-            qs = qs.filter(experience__lte=max_exp)
-        if min_age:
-            qs = qs.filter(age__gte=min_age)
-        if max_age:
-            qs = qs.filter(age__lte=max_age)
-
-        # Search
-        passport_id = request.GET.get("passport_id")
-        applicant_name = request.GET.get("applicant_name")
-        if passport_id:
-            qs = qs.filter(passport_id__icontains=passport_id)
-        if applicant_name:
-            qs = qs.filter(name__icontains=applicant_name)
-
-        data = list(qs.values())
-        return response("success", 200, "Applicants fetched", data)
-    except Exception as e:
-        return response("error", 400, "Bad request", {"error": str(e)})
-
-def get_applicant(request):
-    try:
-        # Allowed fields for filtering
-        allowed_filters = ["application_no", "passport_no", "religion", "gender", "visa_no"]
-
-        filters = {}
-        for field in allowed_filters:
-            value = request.GET.get(field)
-            if value:
-                filters[field] = value
-
-        if not filters:
-            return response("fail", 400, "No filter parameter provided")
-         
-        # Get only the first matching applicant
-        applicant = Applicant.objects.filter(**filters).first()
-
-        if not applicant:
-            return response("fail", 404, "Applicant not found")
-
-        # Serialize applicant fields
-        applicant_data = {
-            field.name: getattr(applicant, field.name)
-            for field in applicant._meta.fields
-        }
-
-        return response("success", 200, "Applicant fetched", applicant_data)
-
-    except Exception as e:
-        return response("error", 400, "Bad request", {"error": str(e)})
-
 # Update Applicant
 @csrf_exempt
 def update_applicant(request, applicant_id):
@@ -210,47 +143,6 @@ def delete_applicant(request, applicant_id):
         return response("success", 200, "Applicant deleted")
     except Exception as e:
         return response("error", 400, "Bad request", {"error": str(e)})
-    
-    
-    
-    
-@csrf_exempt
-def create_full_applicant(request):
-    if request.method != "POST":
-        return JsonResponse({"status": "error", "code": 405, "message": "Only POST allowed"}, status=405)
-
-    try:
-        data = json.loads(request.body)
-
-        with Transaction.atomic():
-            # Create Applicant first
-            applicant_data = data.get("applicant")
-            applicant = Applicant.objects.create(**applicant_data)
-
-            # SponsorVisa (many-to-one)
-            sponsor_visa_data = data.get("sponsor_visa")
-            if sponsor_visa_data:
-                SponsorVisa.objects.create(applicant=applicant, **sponsor_visa_data)
-
-            # Relative (many-to-one)
-            relative_data = data.get("relative")
-            if relative_data:
-                Relative.objects.create(applicant=applicant, **relative_data)
-
-            # OtherInformation (one-to-one)
-            other_info_data = data.get("other_information")
-            if other_info_data:
-                OtherInformation.objects.create(applicant=applicant, **other_info_data)
-
-            # SkillsExperience (one-to-one)
-            skills_data = data.get("skills_experience")
-            if skills_data:
-                SkillsExperience.objects.create(applicant=applicant, **skills_data)
-
-        return JsonResponse({"status": "success", "code": 201, "message": "Applicant and related data created", "applicant_id": applicant.id})
-
-    except Exception as e:
-        return JsonResponse({"status": "error", "code": 400, "message": "Bad request", "error": str(e)}, status=400)
 
 
 def calculate_age_range(min_age, max_age):
@@ -306,8 +198,20 @@ def list_applicants_full(request):
 
         # Search by passport_no (partial)
         passport_no = request.GET.get("passport_no")
+        gender = request.GET.get("gender")
+        religion = request.GET.get("religion")
+        full_name = request.GET.get("full_name")
+        application_no = request.GET.get("application_no")
         if passport_no:
             qs = qs.filter(passport_no__icontains=passport_no)
+        if full_name:
+            qs = qs.filter(full_name__icontains=full_name)
+        if application_no:
+            qs = qs.filter(application_no__icontains=application_no)
+        if gender:
+            qs = qs.filter(gender__iexact=gender)
+        if religion:
+            qs = qs.filter(religion__iexact=religion) 
 
         # Filter by age (min_age, max_age)
         min_age = request.GET.get("min_age")

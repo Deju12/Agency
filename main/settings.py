@@ -66,6 +66,7 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "https://agency-roan-psi.vercel.app",
     "http://localhost:5173",
+    "https://agency-frontend-five.vercel.app",
 ]
 CORS_ALLOW_CREDENTIALS = True
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'

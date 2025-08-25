@@ -127,4 +127,16 @@ class SkillsExperience(models.Model):
 
     def __str__(self):
         return f"Skills for {self.applicant.full_name}"
+    
+class ApplicantSelection(models.Model):
+    applicant = models.OneToOneField(Applicant, on_delete=models.CASCADE, related_name="selection_status")
+    is_active = models.BooleanField(default=True)  # Whether the applicant is active
+    is_selected = models.BooleanField(default=False)  # Whether the applicant is selected
+    selected_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="selected_applicants"
+    )  # Which user selected the applicant
+    selected_on = models.DateTimeField(auto_now_add=True, null=True, blank=True)  # When selected
 
+    def __str__(self):
+        status = "Selected" if self.is_selected else "Not Selected"
+        return f"{self.applicant.full_name} - {status}"

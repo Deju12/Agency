@@ -18,10 +18,11 @@ urlpatterns = [
     path("applicants/update/<str:applicant_id>", views.update_applicant),
     path("applicants/delete/<str:applicant_id>", views.delete_applicant),
     
-    #count and list
+    #select,count and list
     path('total-applicants/', views.total_applicants_count, name='total_applicants_count'),
     path('selected-applicants/', views.selected_applicants, name='selected_applicants'),
     path('selected-by-user/<int:user_id>/', views.selected_by_user,name='selected_by_user'),
     path('active-inactive-applicants/', views.active_inactive_applicants, name='active_inactive_applicants'),
+     path('selection/<int:applicant_id>/', views.toggle_applicant_selection, name='selection'),
 ]
 

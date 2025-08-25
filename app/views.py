@@ -1,4 +1,5 @@
 from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 import json
 
@@ -8,6 +9,7 @@ from .models import Applicant, OtherInformation, Relative, SkillsExperience, Spo
 from django.db import connection, OperationalError
 from django.db.models import Q
 from datetime import date
+from django.utils import timezone
 from django.db import transaction
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -385,4 +387,75 @@ def selected_by_user(request, user_id):
         "user_id": user_id,
         "selected_count": count,
         "selected_list": serializer.data
+    })
+    
+
+@api_view(['POST'])
+def toggle_applicant_selection(request, applicant_id):
+    user_id = request.data.get('user_id')
+    if not user_id:
+        return Response({"error": "user_id is required"}, status=400)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+
+    # Ensure applicant exists
+    try:
+        applicant = Applicant.objects.get(id=applicant_id)
+    except Applicant.DoesNotExist:
+        return Response({"error": "Applicant does not exist"}, status=404)
+
+    # Get or create selection record
+    selection, created = ApplicantSelection.objects.get_or_create(
+        applicant=applicant,
+        defaults={'is_active': True, 'is_selected': False}
+    )
+
+    # Case 1: Already selected by another user
+    if selection.is_selected and selection.selected_by != user:
+        if user.role == "admin":
+            # Admin can only deselect (not reselect)
+            selection.is_selected = False
+            selection.selected_by = None
+            selection.selected_on = None
+            selection.save()
+            return Response({
+                "message": "Admin removed selection",
+                "applicant_id": applicant_id,
+                "is_selected": selection.is_selected,
+                "selected_by": None,
+                "selected_by_username": None,
+                "selected_on": None
+            })
+        else:
+            return Response({
+                "error": "Applicant is already selected by another user",
+                "selected_by": selection.selected_by.username
+            }, status=400)
+
+    # Case 2: Selected by the same user → toggle off
+    if selection.is_selected and selection.selected_by == user:
+        selection.is_selected = False
+        selection.selected_by = None
+        selection.selected_on = None
+        message = "Selection removed"
+
+    # Case 3: Not selected → user can select
+    else:
+        selection.is_selected = True
+        selection.selected_by = user
+        selection.selected_on = timezone.now()
+        message = "Applicant selected"
+
+    selection.save()
+
+    return Response({
+        "message": message,
+        "applicant_id": applicant_id,
+        "is_selected": selection.is_selected,
+        "selected_by": selection.selected_by.id if selection.selected_by else None,
+        "selected_by_username": selection.selected_by.username if selection.selected_by else None,
+        "selected_on": selection.selected_on
     })

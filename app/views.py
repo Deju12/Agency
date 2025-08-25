@@ -3,11 +3,16 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 
 from psycopg import Transaction
+from requests import Response
 from .models import Applicant, OtherInformation, Relative, SkillsExperience, SponsorVisa, User, ApplicantSelection
 from django.db import connection, OperationalError
 from django.db.models import Q
 from datetime import date
 from django.db import transaction
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from .models import ApplicantSelection
+from .serializers import ApplicantSelectionSerializer
 
 def response(status, code, message, data=None):
     """Generate a standardized JSON API response."""
@@ -161,46 +166,6 @@ def forgot_password_view(request):
             return response("error", 401, "Invalid username or forgot key")
     except Exception as e:
         return response("error", 400, "Bad request", {"error": str(e)})
-    
-# # Create Applicant  
-# @csrf_exempt
-# def create_applicant(request):
-#     if request.method != "POST":
-#         return response("error", 405, "Only POST allowed")
-#     try:
-#         data = json.loads(request.body)
-
-#         with transaction.atomic():
-#             # Extract only applicant fields here
-#             applicant_data = data.get("applicant", {})
-#             applicant = Applicant.objects.create(**applicant_data)
-
-#             # Create SponsorVisa
-#             sponsor_visa_data = data.get("sponsor_visa")
-#             if sponsor_visa_data:
-#                 SponsorVisa.objects.create(applicant=applicant, **sponsor_visa_data)
-
-#             # Create Relative
-#             relative_data = data.get("relative")
-#             if relative_data:
-#                 Relative.objects.create(applicant=applicant, **relative_data)
-
-#             # Create OtherInformation (OneToOne)
-#             other_info_data = data.get("other_information")
-#             if other_info_data:
-#                 OtherInformation.objects.create(applicant=applicant, **other_info_data)
-
-#             # Create SkillsExperience (OneToOne)
-#             skills_data = data.get("skills_experience")
-#             if skills_data:
-#                 SkillsExperience.objects.create(applicant=applicant, **skills_data)
-
-#         return response("success", 201, "Applicant created", {"id": applicant.id})
-#     except Exception as e:
-#         return response("error", 400, "Bad request", {"error": str(e)})
-
-
-
 
 # Create Applicant
 @csrf_exempt
@@ -375,3 +340,49 @@ def list_applicants_full(request):
 
     except Exception as e:
         return JsonResponse({"status": "error", "code": 400, "message": "Bad request", "error": str(e)}, status=400)
+
+
+@api_view(['GET'])
+def active_inactive_applicants(request):
+    # Active applicants
+    active_qs = ApplicantSelection.objects.filter(is_active=True)
+    active_serializer = ApplicantSelectionSerializer(active_qs, many=True)
+    active_count = active_qs.count()
+
+    # Inactive applicants
+    inactive_qs = ApplicantSelection.objects.filter(is_active=False)
+    inactive_serializer = ApplicantSelectionSerializer(inactive_qs, many=True)
+    inactive_count = inactive_qs.count()
+
+    return Response({
+        "active_count": active_count,
+        "active_list": active_serializer.data,
+        "inactive_count": inactive_count,
+        "inactive_list": inactive_serializer.data
+    })
+    
+@api_view(['GET'])
+def total_applicants_count(request):
+    count = Applicant.objects.count()
+    return Response({"total_applicants": count})
+    
+@api_view(['GET'])
+def selected_applicants(request):
+    selected_qs = ApplicantSelection.objects.filter(is_selected=True)
+    serializer = ApplicantSelectionSerializer(selected_qs, many=True)
+    count = selected_qs.count()
+    return Response({
+        "selected_count": count,
+        "selected_list": serializer.data
+    })
+
+@api_view(['GET'])
+def selected_by_user(request, user_id):
+    selected_qs = ApplicantSelection.objects.filter(is_selected=True, selected_by__id=user_id)
+    serializer = ApplicantSelectionSerializer(selected_qs, many=True)
+    count = selected_qs.count()
+    return Response({
+        "user_id": user_id,
+        "selected_count": count,
+        "selected_list": serializer.data
+    })

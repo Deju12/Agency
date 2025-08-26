@@ -15,6 +15,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import ApplicantSelection
 from .serializers import ApplicantSelectionSerializer
+from rest_framework import status
 
 def response(status, code, message, data=None):
     """Generate a standardized JSON API response."""
@@ -391,7 +392,7 @@ def selected_by_user(request, user_id):
     
 
 @api_view(['POST'])
-def toggle_applicant_selection(request, applicant_id):
+def applicant_selection(request, applicant_id):
     user_id = request.data.get('user_id')
     if not user_id:
         return Response({"error": "user_id is required"}, status=400)
@@ -472,3 +473,20 @@ def partners_list(request):
         for user in partners
     ]
     return Response({"count": partners.count(), "partners": data})
+
+@api_view(['POST'])
+def applicant_active(request, applicant_id):
+    try:
+        selection = ApplicantSelection.objects.get(applicant_id=applicant_id)
+    except ApplicantSelection.DoesNotExist:
+        return Response({"error": "ApplicantSelection not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Flip the active status
+    selection.is_active = not selection.is_active
+    selection.save()
+
+    return Response({
+        "message": "Applicant active status updated",
+        "applicant_id": applicant_id,
+        "is_active": selection.is_active
+    }, status=status.HTTP_200_OK)

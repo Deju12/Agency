@@ -23,7 +23,8 @@ urlpatterns = [
     path('selected-applicants/', views.selected_applicants, name='selected_applicants'),
     path('selected-by-user/<int:user_id>/', views.selected_by_user,name='selected_by_user'),
     path('active-inactive-applicants/', views.active_inactive_applicants, name='active_inactive_applicants'),
-    path('selection/<int:applicant_id>/', views.toggle_applicant_selection, name='selection'),
+    path('selection/<int:applicant_id>/', views.applicant_selection, name='selection'),
     path('partners/', views.partners_list, name='partners_list'),
+    path('applicants/<int:applicant_id>/', views.applicant_active, name="applicant_active"),
 ]
 

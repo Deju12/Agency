@@ -66,6 +66,24 @@ def get_all_users(request):
         })
         
 #CREATE user
+# @csrf_exempt
+# def create_user(request):
+#     if request.method != "POST":
+#         return JsonResponse({"status": "fail", "code": 405, "message": "Method not allowed"})
+#     try:
+#         body = json.loads(request.body)
+#         username = body.get("username")
+#         password = body.get("password")
+#         role = body.get("role")
+
+#         if not all([username, password, role]):
+#             return JsonResponse({"status": "fail", "code": 400, "message": "Missing required fields"})
+
+#         user = User.objects.create(username=username, password=password, role=role)
+#         return JsonResponse({"status": "success", "code": 201, "message": "User created", "data": {"id": user.id}})
+#     except Exception as e:
+#         return JsonResponse({"status": "error", "code": 400, "message": "Bad request", "data": {"error": str(e)}})
+
 @csrf_exempt
 def create_user(request):
     if request.method != "POST":
@@ -75,14 +93,49 @@ def create_user(request):
         username = body.get("username")
         password = body.get("password")
         role = body.get("role")
+        forgot_key = body.get("forgot_key")
 
         if not all([username, password, role]):
             return JsonResponse({"status": "fail", "code": 400, "message": "Missing required fields"})
 
-        user = User.objects.create(username=username, password=password, role=role)
-        return JsonResponse({"status": "success", "code": 201, "message": "User created", "data": {"id": user.id}})
+        # ✅ check if role is valid
+        valid_roles = dict(User.ROLE_CHOICES).keys()
+        if role not in valid_roles:
+            return JsonResponse({
+                "status": "fail",
+                "code": 400,
+                "message": f"Invalid role. Must be one of {list(valid_roles)}"
+            })
+            
+        if User.objects.filter(username=username).exists():
+            return JsonResponse({
+                "status": "fail",
+                "code": 400,
+                "message": "Username already taken"
+            })
+
+        # ⚠️ Hash password instead of storing plain text
+        user = User.objects.create(
+            username=username,
+            password=password,  # secure password
+            role=role,
+            forgot_key = forgot_key
+        )
+
+        return JsonResponse({
+            "status": "success",
+            "code": 201,
+            "message": "User created",
+            "data": {"id": user.id}
+        })
+
     except Exception as e:
-        return JsonResponse({"status": "error", "code": 400, "message": "Bad request", "data": {"error": str(e)}})
+        return JsonResponse({
+            "status": "error",
+            "code": 400,
+            "message": "Bad request",
+            "data": {"error": str(e)}
+        })
 
 # UPDATE user
 @csrf_exempt

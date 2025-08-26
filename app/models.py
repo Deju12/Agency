@@ -3,7 +3,7 @@ from django.db import models
 class User(models.Model):
     ROLE_CHOICES = (
         ('admin', 'Admin'),
-        ('pertner', 'Partner'),
+        ('partner', 'Partner'),
     )
 
     username = models.CharField(max_length=100, unique=True)

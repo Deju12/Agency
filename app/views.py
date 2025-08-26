@@ -459,3 +459,16 @@ def toggle_applicant_selection(request, applicant_id):
         "selected_by_username": selection.selected_by.username if selection.selected_by else None,
         "selected_on": selection.selected_on
     })
+
+@api_view(['GET'])
+def partners_list(request):
+    partners = User.objects.filter(role="partner")  # or "partner" if you fix typo
+    data = [
+        {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+        }
+        for user in partners
+    ]
+    return Response({"count": partners.count(), "partners": data})

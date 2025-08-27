@@ -321,7 +321,7 @@ def delete_applicant(request, applicant_id):
     if request.method != "DELETE":
         return response("error", 405, "Only DELETE allowed")
     try:
-        applicant = Applicant.objects.filter(application_no=applicant_id).first()
+        applicant = Applicant.objects.filter(id=applicant_id).first()
         if not applicant:
             return response("fail", 404, "Applicant not found")
         applicant.delete()

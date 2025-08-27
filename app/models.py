@@ -31,7 +31,7 @@ class Applicant(models.Model):
     full_photo = models.ImageField(upload_to='applicants/full_photos/', blank=True, null=True)
     passport_photo = models.ImageField(upload_to='applicants/passport_photos/', blank=True, null=True)
 
-    passport_no = models.CharField(max_length=50)
+    passport_no = models.CharField(max_length=50, unique=True,blank=False, null=False)
     passport_type = models.CharField(max_length=50)
     place_of_issue = models.CharField(max_length=100)
     place_of_birth = models.CharField(max_length=100)

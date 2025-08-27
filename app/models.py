@@ -24,8 +24,13 @@ class Applicant(models.Model):
 
     application_no = models.CharField(max_length=50, unique=True)
     date = models.DateField()
-    full_name = models.CharField(max_length=150,blank=False, null=False) 
-    photo = models.ImageField(upload_to='applicants/photos/', blank=False, null=False)
+    full_name = models.CharField(max_length=150, blank=False, null=False) 
+
+    # Image fields
+    photo = models.ImageField(upload_to='applicants/photos/', blank=False, null=False)  # existing
+    full_photo = models.ImageField(upload_to='applicants/full_photos/', blank=True, null=True)
+    passport_photo = models.ImageField(upload_to='applicants/passport_photos/', blank=True, null=True)
+
     passport_no = models.CharField(max_length=50)
     passport_type = models.CharField(max_length=50)
     place_of_issue = models.CharField(max_length=100)

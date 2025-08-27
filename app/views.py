@@ -2,7 +2,8 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 import json
-
+from django.core.files.base import ContentFile
+import base64
 from psycopg import Transaction
 from requests import Response
 from .models import Applicant, OtherInformation, Relative, SkillsExperience, SponsorVisa, User, ApplicantSelection
@@ -65,25 +66,6 @@ def get_all_users(request):
             "data": {"error": str(e)}
         })
         
-#CREATE user
-# @csrf_exempt
-# def create_user(request):
-#     if request.method != "POST":
-#         return JsonResponse({"status": "fail", "code": 405, "message": "Method not allowed"})
-#     try:
-#         body = json.loads(request.body)
-#         username = body.get("username")
-#         password = body.get("password")
-#         role = body.get("role")
-
-#         if not all([username, password, role]):
-#             return JsonResponse({"status": "fail", "code": 400, "message": "Missing required fields"})
-
-#         user = User.objects.create(username=username, password=password, role=role)
-#         return JsonResponse({"status": "success", "code": 201, "message": "User created", "data": {"id": user.id}})
-#     except Exception as e:
-#         return JsonResponse({"status": "error", "code": 400, "message": "Bad request", "data": {"error": str(e)}})
-
 @csrf_exempt
 def create_user(request):
     if request.method != "POST":
@@ -98,7 +80,7 @@ def create_user(request):
         if not all([username, password, role]):
             return JsonResponse({"status": "fail", "code": 400, "message": "Missing required fields"})
 
-        # ✅ check if role is valid
+        # check if role is valid
         valid_roles = dict(User.ROLE_CHOICES).keys()
         if role not in valid_roles:
             return JsonResponse({
@@ -114,7 +96,7 @@ def create_user(request):
                 "message": "Username already taken"
             })
 
-        # ⚠️ Hash password instead of storing plain text
+        # Hash password instead of storing plain text
         user = User.objects.create(
             username=username,
             password=password,  # secure password
@@ -228,66 +210,111 @@ def forgot_password_view(request):
 def create_applicant(request):
     if request.method != "POST":
         return response("error", 405, "Only POST allowed")
-
     try:
         data = json.loads(request.body)
+        applicant_data = data.get("applicant", {})
+
+        # Decode base64 images
+        for img_field in ["photo", "full_photo", "passport_photo"]:
+            img_data = applicant_data.get(img_field)
+            if img_data:
+                format, imgstr = img_data.split(';base64,') 
+                ext = format.split('/')[-1]
+                applicant_data[img_field] = ContentFile(base64.b64decode(imgstr), name=f"{img_field}.{ext}")
 
         with transaction.atomic():
-            # Extract only applicant fields here
-            applicant_data = data.get("applicant", {})
             applicant = Applicant.objects.create(**applicant_data)
 
-            # Create SponsorVisa
-            sponsor_visa_data = data.get("sponsor_visa")
-            if sponsor_visa_data:
-                SponsorVisa.objects.create(applicant=applicant, **sponsor_visa_data)
+            # Other related objects
+            if "sponsor_visa" in data:
+                SponsorVisa.objects.create(applicant=applicant, **data["sponsor_visa"])
+            if "relative" in data:
+                Relative.objects.create(applicant=applicant, **data["relative"])
+            if "other_information" in data:
+                OtherInformation.objects.create(applicant=applicant, **data["other_information"])
+            if "skills_experience" in data:
+                SkillsExperience.objects.create(applicant=applicant, **data["skills_experience"])
 
-            # Create Relative
-            relative_data = data.get("relative")
-            if relative_data:
-                Relative.objects.create(applicant=applicant, **relative_data)
-
-            # Create OtherInformation (OneToOne)
-            other_info_data = data.get("other_information")
-            if other_info_data:
-                OtherInformation.objects.create(applicant=applicant, **other_info_data)
-
-            # Create SkillsExperience (OneToOne)
-            skills_data = data.get("skills_experience")
-            if skills_data:
-                SkillsExperience.objects.create(applicant=applicant, **skills_data)
-
-            #Create ApplicantSelection (default status)
-            ApplicantSelection.objects.create(
-                applicant=applicant,
-                is_active=True,
-                is_selected=False,
-                selected_by=None  # no user selected yet
-            )
+            ApplicantSelection.objects.create(applicant=applicant, is_active=True, is_selected=False)
 
         return response("success", 201, "Applicant created", {"id": applicant.id})
 
     except Exception as e:
         return response("error", 400, "Bad request", {"error": str(e)})
-
-
 # Update Applicant
 @csrf_exempt
 def update_applicant(request, applicant_id):
     if request.method != "PUT":
         return response("error", 405, "Only PUT allowed")
+
     try:
-        applicant = Applicant.objects.filter(application_no=applicant_id).first()
+        applicant = Applicant.objects.filter(passport_no=applicant_id).first()
         if not applicant:
             return response("fail", 404, "Applicant not found")
+
         data = json.loads(request.body)
-        for key, value in data.items():
-            setattr(applicant, key, value)
-        applicant.save()
+
+        with transaction.atomic():
+            # ✅ Update Applicant base fields 
+            if "applicant" in data:
+                for key, value in data["applicant"].items():
+                    setattr(applicant, key, value)
+                applicant.save()
+
+            # ✅ SponsorVisas (many-to-one)
+            if "sponsor_visas" in data:
+                for sponsor in data["sponsor_visas"]:
+                    sponsor_id = sponsor.pop("id", None)
+                    if sponsor_id:
+                        SponsorVisa.objects.filter(id=sponsor_id, applicant=applicant).update(**sponsor)
+                    else:
+                        SponsorVisa.objects.create(applicant=applicant, **sponsor)
+
+            # ✅ Relatives (many-to-one)
+            if "relatives" in data:
+                for relative in data["relatives"]:
+                    relative_id = relative.pop("id", None)
+                    if relative_id:
+                        Relative.objects.filter(id=relative_id, applicant=applicant).update(**relative)
+                    else:
+                        Relative.objects.create(applicant=applicant, **relative)
+
+            # ✅ OtherInformation (one-to-one)
+            if "other_information" in data:
+                other_info_data = data["other_information"]
+                if hasattr(applicant, "other_information"):
+                    for key, value in other_info_data.items():
+                        setattr(applicant.other_information, key, value)
+                    applicant.other_information.save()
+                else:
+                    OtherInformation.objects.create(applicant=applicant, **other_info_data)
+
+            # ✅ SkillsExperience (one-to-one)
+            if "skills_experience" in data:
+                skills_data = data["skills_experience"]
+                if hasattr(applicant, "skills_experience"):
+                    for key, value in skills_data.items():
+                        setattr(applicant.skills_experience, key, value)
+                    applicant.skills_experience.save()
+                else:
+                    SkillsExperience.objects.create(applicant=applicant, **skills_data)
+
+            # ✅ ApplicantSelection (one-to-one)
+            if "applicant_selection" in data:
+                selection_data = data["applicant_selection"]
+                if hasattr(applicant, "selection_status"):
+                    for key, value in selection_data.items():
+                        setattr(applicant.selection_status, key, value)
+                    applicant.selection_status.save()
+                else:
+                    ApplicantSelection.objects.create(applicant=applicant, **selection_data)
+
         return response("success", 200, "Applicant updated")
+
     except Exception as e:
         return response("error", 400, "Bad request", {"error": str(e)})
 
+ 
 # Delete Applicant
 @csrf_exempt
 def delete_applicant(request, applicant_id):
@@ -301,7 +328,6 @@ def delete_applicant(request, applicant_id):
         return response("success", 200, "Applicant deleted")
     except Exception as e:
         return response("error", 400, "Bad request", {"error": str(e)})
-
 
 def calculate_age_range(min_age, max_age):
     today = date.today()

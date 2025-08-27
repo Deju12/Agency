@@ -5,7 +5,7 @@ import json
 from django.core.files.base import ContentFile
 import base64
 from psycopg import Transaction
-from requests import Response
+from requests import Response, request
 from .models import Applicant, OtherInformation, Relative, SkillsExperience, SponsorVisa, User, ApplicantSelection
 from django.db import connection, OperationalError
 from django.db.models import Q
@@ -340,10 +340,18 @@ def calculate_age_range(min_age, max_age):
     return min_birth_date, max_birth_date
 
 
-def get_applicant_full_info(applicant):
-    # Convert related objects to dict excluding Django internal fields
+def get_applicant_full_info(applicant, request=None):
+    """Return serialized applicant info including image URLs."""
     def clean_dict(d):
         return {k: v for k, v in d.items() if not k.startswith('_') and k != 'applicant_id'}
+
+    def get_image_url(image_field):
+        if image_field and hasattr(image_field, 'url'):
+            if request:  # Make sure request is passed
+                base_url = request.build_absolute_uri('/')[:-1]  # http://127.0.0.1:8000
+                return f"{base_url}{image_field.url}"
+            return image_field.url  # fallback to relative URL
+        return None
 
     return {
         "id": applicant.id,
@@ -369,8 +377,14 @@ def get_applicant_full_info(applicant):
         "woreda": applicant.woreda,
         "house_no": applicant.house_no,
 
-        "sponsor_visas": [clean_dict(sponsor_visa.__dict__) for sponsor_visa in applicant.sponsor_visas.all()],
-        "relatives": [clean_dict(relative.__dict__) for relative in applicant.relatives.all()],
+        # Image URLs
+        "photo": get_image_url(getattr(applicant, "photo", None)),
+        "full_photo": get_image_url(getattr(applicant, "full_photo", None)),
+        "passport_photo": get_image_url(getattr(applicant, "passport_photo", None)),
+
+        # Related objects
+        "sponsor_visas": [clean_dict(s.__dict__) for s in applicant.sponsor_visas.all()],
+        "relatives": [clean_dict(r.__dict__) for r in applicant.relatives.all()],
         "other_information": clean_dict(applicant.other_information.__dict__) if hasattr(applicant, 'other_information') else None,
         "skills_experience": clean_dict(applicant.skills_experience.__dict__) if hasattr(applicant, 'skills_experience') else None,
     }
@@ -416,7 +430,7 @@ def list_applicants_full(request):
                 qs = qs.filter(skills_experience__experience_abroad=False)
 
         # Build response data
-        data = [get_applicant_full_info(applicant) for applicant in qs]
+        data = [get_applicant_full_info(applicant, request=request) for applicant in qs]
 
         return JsonResponse({"status": "success", "code": 200, "message": "Applicants fetched", "data": data})
 

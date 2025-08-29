@@ -133,6 +133,7 @@ def update_user(request, user_id):
         user.username = body.get("username", user.username)
         user.password = body.get("password", user.password)
         user.role = body.get("role", user.role)
+        user.forgot_key = body.get("forgot_key", user.forgot_key)
         user.save()
 
         return JsonResponse({"status": "success", "code": 200, "message": "User updated"})

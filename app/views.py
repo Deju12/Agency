@@ -348,6 +348,7 @@ def get_applicant_full_info(applicant, request=None):
     return {
         "id": applicant.id,
         "application_no": applicant.application_no,
+        "selection_status": clean_dict(applicant.selection_status.__dict__) if hasattr(applicant, "selection_status") else None,
         "date": applicant.date.isoformat() if applicant.date else None,
         "full_name": applicant.full_name,
         "passport_no": applicant.passport_no,
@@ -379,6 +380,7 @@ def get_applicant_full_info(applicant, request=None):
         "relatives": [clean_dict(r.__dict__) for r in applicant.relatives.all()],
         "other_information": clean_dict(applicant.other_information.__dict__) if hasattr(applicant, 'other_information') else None,
         "skills_experience": clean_dict(applicant.skills_experience.__dict__) if hasattr(applicant, 'skills_experience') else None,
+        
     }
 
 

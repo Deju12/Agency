@@ -210,22 +210,21 @@ def forgot_password_view(request):
 def create_applicant(request):
     if request.method != "POST":
         return response("error", 405, "Only POST allowed")
+    
     try:
         data = json.loads(request.body)
         applicant_data = data.get("applicant", {})
-
-        # Decode base64 images
-        for img_field in ["photo", "full_photo", "passport_photo"]:
-            img_data = applicant_data.get(img_field)
-            if img_data:
-                format, imgstr = img_data.split(';base64,') 
-                ext = format.split('/')[-1]
-                applicant_data[img_field] = ContentFile(base64.b64decode(imgstr), name=f"{img_field}.{ext}")
+        photo = applicant_data.get("photo")  # should be a full base64 string
+        full_photo = applicant_data.get("full_photo")
+        passport_photo = applicant_data.get("passport_photo")
+        print("Photo length:", len(applicant_data.get("photo", "")))
+        print("Full Photo length:", len(applicant_data.get("full_photo", "")))
+        print("Passport Photo length:", len(applicant_data.get("passport_photo", "")))
 
         with transaction.atomic():
             applicant = Applicant.objects.create(**applicant_data)
 
-            # Other related objects
+            # Related objects
             if "sponsor_visa" in data:
                 SponsorVisa.objects.create(applicant=applicant, **data["sponsor_visa"])
             if "relative" in data:
@@ -234,13 +233,14 @@ def create_applicant(request):
                 OtherInformation.objects.create(applicant=applicant, **data["other_information"])
             if "skills_experience" in data:
                 SkillsExperience.objects.create(applicant=applicant, **data["skills_experience"])
-
+            print("Creating applicant with:", applicant_data)
             ApplicantSelection.objects.create(applicant=applicant, is_active=True, is_selected=False)
-
+        
         return response("success", 201, "Applicant created", {"id": applicant.id})
 
     except Exception as e:
         return response("error", 400, "Bad request", {"error": str(e)})
+
 # Update Applicant
 @csrf_exempt
 def update_applicant(request, applicant_id):
@@ -341,17 +341,9 @@ def calculate_age_range(min_age, max_age):
 
 
 def get_applicant_full_info(applicant, request=None):
-    """Return serialized applicant info including image URLs."""
+    """Return serialized applicant info including base64 images."""
     def clean_dict(d):
         return {k: v for k, v in d.items() if not k.startswith('_') and k != 'applicant_id'}
-
-    def get_image_url(image_field):
-        if image_field and hasattr(image_field, 'url'):
-            if request:  # Make sure request is passed
-                base_url = request.build_absolute_uri('/')[:-1]  # http://127.0.0.1:8000
-                return f"{base_url}{image_field.url}"
-            return image_field.url  # fallback to relative URL
-        return None
 
     return {
         "id": applicant.id,
@@ -377,10 +369,10 @@ def get_applicant_full_info(applicant, request=None):
         "woreda": applicant.woreda,
         "house_no": applicant.house_no,
 
-        # Image URLs
-        "photo": get_image_url(getattr(applicant, "photo", None)),
-        "full_photo": get_image_url(getattr(applicant, "full_photo", None)),
-        "passport_photo": get_image_url(getattr(applicant, "passport_photo", None)),
+        # Base64 images
+        "photo": applicant.photo,
+        "full_photo": applicant.full_photo,
+        "passport_photo": applicant.passport_photo,
 
         # Related objects
         "sponsor_visas": [clean_dict(s.__dict__) for s in applicant.sponsor_visas.all()],
